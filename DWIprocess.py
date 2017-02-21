@@ -6,6 +6,7 @@ import argparse
 from os import listdir
 from os.path import isfile, join
 import subprocess
+import shutil
 import time
 
 ## DWI pre-processing script for Man
@@ -104,7 +105,7 @@ def create_programlist(filename_prefix):
         print('Unable to get filename prefix - stopping')
     return programlist
 
-def processinputfile(inputfile, checkflag=False):
+def processinputfile(inputfile, outputdir, checkflag=False):
     """
     Set up and run file processing
     :param filename:
@@ -113,13 +114,25 @@ def processinputfile(inputfile, checkflag=False):
     if checkvalidinput(inputfile) and os.path.exists(inputfile):
         filename = os.path.basename(inputfile)
         filename_prefix = get_filenameprefix(filename)
+        pathname = os.path.dirname(inputfile)
+
         if filename_prefix:
-            #print("Prefix is: ", filename_prefix)
+
             programlist = create_programlist(filename_prefix)
             if checkflag:
                 print("\n******Checking programlist (no run) for ", inputfile, "*********\n")
             else:
                 print("\n******Running programlist for ", inputfile, "*********\n")
+                # create subdirectory
+                if not os.path.exists(join(outputdir, filename_prefix)):
+                    os.makedirs(join(outputdir, filename_prefix))
+                # Copy files starting with prefix into output dir
+                mvfiles = [f for f in listdir(pathname) if isfile(join(pathname, f)) and f.startswith(filename_prefix)]
+                for mv in mvfiles:
+                    shutil.copy2(join(pathname, mv), join(outputdir, filename_prefix, mv))
+                #Change into directory
+                os.chdir(join(outputdir, filename_prefix))
+
             num= 0
             for program in programlist:
                 num +=1
@@ -129,9 +142,19 @@ def processinputfile(inputfile, checkflag=False):
                     print("Executing program: ", num, ":", program)
                     parts = program.split(" ")
                     #Test with ping: p = subprocess.Popen(["ping", "-n","2","www.bigpond.com"], stdout=subprocess.PIPE)
-                    p = subprocess.Popen(parts, stdout=subprocess.PIPE)
-                    output, err = p.communicate()
-                    print(output)
+                    try:
+                        p = subprocess.Popen(parts, stdout=subprocess.PIPE)
+                        output, err = p.communicate()
+                        print(output)
+                    except OSError as err:
+                        print("OS error: {0}".format(err))
+                        break
+                    except ValueError:
+                        print("Could not process program:", program)
+                        break
+                    except:
+                        print("Unexpected error:", sys.exc_info()[0])
+                        break
 
 
         else:
@@ -159,6 +182,8 @@ def main():
                         help="Full path to input directory")
     parser.add_argument("-f", "--filename", dest="inputfile",action="store",
                         help="Full path to input file")
+    parser.add_argument("-o", "--output", dest="outputdir", action="store",
+                        help="Full path to output directory")
     parser.add_argument("-c", "--check", dest="checkconfig",action="store_true",
                         help="Check commands without running")
 
@@ -168,7 +193,19 @@ def main():
         checkflag= True
     else:
         checkflag = False
-
+    if args.outputdir:
+        outputdir = args.outputdir
+    elif args.inputdir:
+        outputdir = args.inputdir
+        outputdir = outputdir.replace(os.path.basename(outputdir), 'out')
+    elif args.inputfile:
+        outputdir = os.path.dirname(args.inputfile)
+        outputdir = outputdir.replace(os.path.basename(outputdir), 'out')
+    else:
+        outputdir = 'temp'
+    #create output directory;
+    if not os.path.exists(outputdir):
+        os.makedirs(outputdir)
     if args.inputdir:
         #Check directory is valid
         if checkvalidinput(args.inputdir) and os.path.exists(args.inputdir) and os.stat(args.inputdir).st_size > 0:
@@ -176,13 +213,13 @@ def main():
             print("Loop through directory: ", args.inputdir)
             gzfiles = [f for f in listdir(args.inputdir) if isfile(join(args.inputdir, f)) and os.path.splitext(f)[1]=='.gz']
             for inputfile in gzfiles:
-                processinputfile(join(args.inputdir,inputfile), checkflag)
+                processinputfile(join(args.inputdir,inputfile), outputdir, checkflag)
 
         else:
             print("Directory is not valid or does not contain any files - exiting")
-            sys.exit(0)
+
     elif args.inputfile:
-        processinputfile(args.inputfile, checkflag)
+        processinputfile(args.inputfile, outputdir, checkflag)
 
     else:
         print('ERROR: No files specified')
