@@ -26,7 +26,7 @@ def get_filenameprefix(filename):
     :param filename:
     :return: prefix (digits 1-6)
     """
-    pattern = '^(\d{1,6})(.*).nii.gz'
+    pattern = '^(\d{1,6})(.*).nii.gz$'
     #p = re.compile(pattern)
     return re.search(pattern, filename, re.S).group(1)
 
@@ -80,9 +80,9 @@ def create_programlist(filename_prefix):
                                         ('6', {'program': 'dwi2response', 'options': 'tournier',
                                                'inputfiles': ['%s-dwi-biascorrected.mif'],
                                                'outputfile': '%s-response.txt'}),
-                                        ('7', {'program': 'dwi2fod', 'options': '-mask',
+                                        ('7', {'program': 'dwi2fod', 'pre':'csd', 'options': '',
                                                'inputfiles': ['%s-dwi-biascorrected.mif', '%s-response.txt','%s-fod.mif' ],
-                                               'outputfile': '%s-dwi-mask.mif'}),
+                                               'outputfile': '-mask %s-dwi-mask.mif'}),
                                         ])
 
     if filename_prefix:
@@ -95,7 +95,7 @@ def create_programlist(filename_prefix):
 
             outputfile = v['outputfile'] % filename_prefix
             if 'pre' in v:
-                pre = v['pre'] % filename_prefix
+                pre = v['pre'].replace('%s', filename_prefix)
                 process_string = '%s %s %s %s %s' % (v['program'], pre, v['options'], inputfiles, outputfile)
             else:
                 process_string = '%s %s %s %s' % (v['program'], v['options'], inputfiles, outputfile)
